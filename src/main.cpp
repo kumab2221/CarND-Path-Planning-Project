@@ -67,12 +67,10 @@ int main() {
 
       if (s != "") {
         auto j = json::parse(s);
-        
         string event = j[0].get<string>();
         
         if (event == "telemetry") {
           // j[1] is the data JSON object
-          
           // Main car's localization Data
           double car_x = j[1]["x"];
           double car_y = j[1]["y"];
@@ -98,35 +96,57 @@ int main() {
             car_s = end_path_s;
           }
 
-          bool too_close = false;
+          bool car_ahead = false;
+          bool car_left = false;
+          bool car_right = false;
 
           for(int i=0; i<sensor_fusion.size(); ++i){
             float d = sensor_fusion[i][6];
-            if(d<(2+4*lane+2) && d>(2+4*lane-2)){
-              double vx = sensor_fusion[i][3];
-              double vy = sensor_fusion[i][4];
-              double check_speed = sqrt(vx*vx+vy*vy);
-              double check_car_s = sensor_fusion[i][5];
+            int car_lane = -1;
 
-              check_car_s+=((double)prev_size*0.02*check_speed);
+            if(d>0 && d<=4){
+              car_lane = 0;
+            }else if(d>4 && d<=8){
+              car_lane = 1;
+            }else if(d>8 && d<=12){
+              car_lane = 2;
+            }
 
-              if((check_car_s>car_s)&&((check_car_s-car_s)<30)){
-                 too_close = true;
-                 if(lane >0){
-                   lane = 0;
-                 }
-              }
+            double vx = sensor_fusion[i][3];
+            double vy = sensor_fusion[i][4];
+            double check_speed = sqrt(vx*vx+vy*vy);
+            double check_car_s = sensor_fusion[i][5];
+
+            check_car_s+=((double)prev_size*0.02*check_speed);
+
+            if(car_lane == lane){
+              car_ahead |= check_car_s>car_s && check_car_s<car_s+30;
+            }else if( car_lane-lane == -1){
+              car_left |= check_car_s>car_s-30 && check_car_s<car_s+30;
+            }else if( car_lane-lane == 1){
+              car_right |= check_car_s>car_s-30 && check_car_s<car_s+30;;
             }
           }
 
-          if(too_close){
-            ref_vel -=0.224;
-          }else if(ref_vel<49.5){
-            ref_vel+=0.244;
+          double speed_diff = 0.0;
+          if(car_ahead){
+            if(!car_left && lane>0){
+              lane--;
+            }else if(!car_right && lane!=2){
+              lane++;
+            }else{
+              speed_diff -= 0.224;
+            }
+          }else{
+            if(lane!=1){
+              if((lane==0 && !car_right) || (lane==2 && !car_left)){
+                lane=1;
+              }
+            }
+            if(ref_vel<49.5){
+              speed_diff += 0.224;
+            }
           }
-
-          json msgJson;
-
           vector<double> next_x_vals;
           vector<double> next_y_vals;
           
@@ -185,7 +205,6 @@ int main() {
           }
 
           tk::spline s;
-
           s.set_points(ptsx, ptsy);
 
           for( int i=0; i<previous_path_x.size(); ++i){
@@ -200,6 +219,13 @@ int main() {
           double x_add_on = 0;
 
           for (int i=0; i<=50-previous_path_x.size(); ++i){
+            ref_vel += speed_diff;
+            if(ref_vel>49.5){
+              ref_vel=49.5;
+            }else if(ref_vel<0.224){
+              ref_vel = 0.224;
+            }
+
             double N = (target_dist/( 0.02*ref_vel/2.24));
             double x_point = x_add_on + target_x/N;
             double y_point = s(x_point);
@@ -219,6 +245,8 @@ int main() {
             next_y_vals.push_back(y_point);
 
           }
+
+          json msgJson;
 
           msgJson["next_x"] = next_x_vals;
           msgJson["next_y"] = next_y_vals;
