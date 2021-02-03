@@ -126,17 +126,17 @@ int main() {
             if(car_lane == lane){
               car_ahead |= check_car_s>car_s && check_car_s<car_s+30;
               if(check_car_s>car_s){
-                ahead_lane_speed = std::max(ahead_lane_speed,check_car_s);
+                ahead_lane_speed = std::min(ahead_lane_speed,check_car_s);
               }
             }else if( car_lane-lane == -1){
               car_left |= check_car_s>car_s-30 && check_car_s<car_s+30;
               if(check_car_s>car_s){
-                left_lane_speed = std::max(left_lane_speed,check_car_s);
+                left_lane_speed = std::min(left_lane_speed,check_car_s);
               }
             }else if( car_lane-lane == 1){
               car_right |= check_car_s>car_s-30 && check_car_s<car_s+30;
               if(check_car_s>car_s){
-                right_lane_speed = std::max(right_lane_speed,check_car_s);
+                right_lane_speed = std::min(right_lane_speed,check_car_s);
               }
             }
           }
@@ -145,9 +145,9 @@ int main() {
           if(car_ahead){
             if(!car_left && !car_right && lane==1){
               if(left_lane_speed>right_lane_speed){
-                lane++;
-              }else{
                 lane--;
+              }else{
+                lane++;
               }
             }
             else if(!car_left && lane>0){
