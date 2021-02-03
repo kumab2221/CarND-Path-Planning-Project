@@ -100,6 +100,10 @@ int main() {
           bool car_left = false;
           bool car_right = false;
 
+          double ahead_lane_speed = 49.5;
+          double left_lane_speed  = 49.5;
+          double right_lane_speed = 49.5;
+
           for(int i=0; i<sensor_fusion.size(); ++i){
             float d = sensor_fusion[i][6];
             int car_lane = -1;
@@ -121,21 +125,37 @@ int main() {
 
             if(car_lane == lane){
               car_ahead |= check_car_s>car_s && check_car_s<car_s+30;
+              if(check_car_s>car_s){
+                ahead_lane_speed = std::max(ahead_lane_speed,check_car_s);
+              }
             }else if( car_lane-lane == -1){
               car_left |= check_car_s>car_s-30 && check_car_s<car_s+30;
+              if(check_car_s>car_s){
+                left_lane_speed = std::max(left_lane_speed,check_car_s);
+              }
             }else if( car_lane-lane == 1){
-              car_right |= check_car_s>car_s-30 && check_car_s<car_s+30;;
+              car_right |= check_car_s>car_s-30 && check_car_s<car_s+30;
+              if(check_car_s>car_s){
+                right_lane_speed = std::max(right_lane_speed,check_car_s);
+              }
             }
           }
 
-          double speed_diff = 0.0;
+          bool too_close = false;
           if(car_ahead){
-            if(!car_left && lane>0){
+            if(!car_left && !car_right && lane==1){
+              if(left_lane_speed>right_lane_speed){
+                lane++;
+              }else{
+                lane--;
+              }
+            }
+            else if(!car_left && lane>0){
               lane--;
             }else if(!car_right && lane!=2){
               lane++;
             }else{
-              speed_diff -= 0.224;
+              too_close = true;
             }
           }else{
             if(lane!=1){
@@ -143,10 +163,8 @@ int main() {
                 lane=1;
               }
             }
-            if(ref_vel<49.5){
-              speed_diff += 0.224;
-            }
           }
+
           vector<double> next_x_vals;
           vector<double> next_y_vals;
           
@@ -219,7 +237,8 @@ int main() {
           double x_add_on = 0;
 
           for (int i=0; i<=50-previous_path_x.size(); ++i){
-            ref_vel += speed_diff;
+            if(!too_close) ref_vel += 0.224;
+            else           ref_vel -= 0.224;
             if(ref_vel>49.5){
               ref_vel=49.5;
             }else if(ref_vel<0.224){
